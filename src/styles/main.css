@@ -1,0 +1,1714 @@
+/* ============================================================================
+   GRID PROTOCOL — visual system
+
+   Black ground, cyan/ice-blue as the neutral "system" colour, amber reserved
+   for enforcement and corruption. Everything here is a thin luminous line on a
+   dark field: no panels, no cards, no dashboards. The world is the interface.
+   ========================================================================== */
+
+@import './font.css';
+
+:root {
+  --black: #000000;
+  --ink: #04070c;
+  --cyan: #4fe3ff;
+  --cyan-dim: #1d6f88;
+  --ice: #bfefff;
+  --white: #ffffff;
+  --amber: #ff9c2b;
+  --amber-dim: #8a4d0e;
+  --violet: #a06bff;
+  --red: #ff3b52;
+
+  --line: color-mix(in srgb, var(--cyan) 26%, transparent);
+  --line-soft: color-mix(in srgb, var(--cyan) 12%, transparent);
+  --glow-cyan:
+    0 0 6px color-mix(in srgb, var(--cyan) 70%, transparent),
+    0 0 22px color-mix(in srgb, var(--cyan) 28%, transparent);
+
+  /* Self-hosted .woff2; see font.css and CREDITS.md. */
+  --font-display: 'Orbitron', 'Rajdhani', system-ui, sans-serif;
+  --font-mono: 'Rajdhani', 'Consolas', ui-monospace, monospace;
+
+  --hud-pad: clamp(14px, 2.2vmin, 26px);
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+  height: 100%;
+  overflow: hidden;
+  background: var(--black);
+  color: var(--ice);
+  font-family: var(--font-mono);
+  overscroll-behavior: none;
+}
+
+body {
+  position: fixed;
+  inset: 0;
+  touch-action: none;
+  user-select: none;
+}
+
+canvas#stage {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  z-index: 0;
+}
+
+.noscript {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: 12px;
+  text-align: center;
+  font-family: var(--font-display);
+  letter-spacing: 0.2em;
+  color: var(--cyan);
+  background: var(--black);
+  z-index: 999;
+}
+
+/* --------------------------------------------------------------------------
+   Atmospheric layers
+   -------------------------------------------------------------------------- */
+
+.layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Faint interference — sells "this is a display". */
+#layer-scanlines {
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(79, 227, 255, 0.028) 0px,
+    rgba(79, 227, 255, 0.028) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  mix-blend-mode: screen;
+  opacity: 0.75;
+  animation: scan-drift 9s linear infinite;
+}
+
+@keyframes scan-drift {
+  from {
+    background-position-y: 0;
+  }
+  to {
+    background-position-y: 3px;
+  }
+}
+
+#layer-vignette {
+  background: radial-gradient(
+    ellipse 120% 90% at 50% 50%,
+    transparent 42%,
+    rgba(0, 0, 0, 0.55) 82%,
+    rgba(0, 0, 0, 0.9) 100%
+  );
+}
+
+/* Driven from TS for jack-in, transitions and death. */
+#layer-flash {
+  background: var(--black);
+  opacity: 0;
+  z-index: 3;
+  transition: opacity 320ms ease-out;
+}
+
+#layer-flash.is-lit {
+  opacity: 1;
+  transition: opacity 60ms ease-in;
+}
+
+/* Photosensitivity guard. A user who asks for reduced flashing gets a static
+   low-contrast wash instead of full-screen luminance jumps. This is a separate
+   query from prefers-reduced-motion. */
+#layer-photosens {
+  background: radial-gradient(
+    ellipse at center,
+    rgba(120, 220, 255, 0.05),
+    rgba(0, 0, 0, 0) 60%
+  );
+  opacity: 0;
+  transition: opacity 600ms ease;
+  z-index: 1;
+}
+
+body.reduced-flash #layer-photosens {
+  opacity: 1;
+}
+
+body.reduced-flash #layer-scanlines {
+  animation: none;
+  opacity: 0.4;
+}
+
+/* --------------------------------------------------------------------------
+   UI root
+   -------------------------------------------------------------------------- */
+
+#ui {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  pointer-events: none;
+}
+
+#ui > * {
+  pointer-events: none;
+}
+
+/* Interactive UI opts back in explicitly. */
+button,
+.clickable,
+.pointer-events {
+  pointer-events: auto;
+}
+
+/* --------------------------------------------------------------------------
+   Shared type styles
+   -------------------------------------------------------------------------- */
+
+.mono-label {
+  font-family: var(--font-display);
+  font-size: clamp(9px, 1.05vmin, 12px);
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: var(--cyan);
+  opacity: 0.85;
+}
+
+.mono-dim {
+  color: var(--cyan-dim);
+}
+
+.mono-bright {
+  color: var(--white);
+  text-shadow: var(--glow-cyan);
+}
+
+.amber {
+  color: var(--amber);
+}
+
+/* Thin luminous rule used under headers and between rows. */
+.rule {
+  height: 1px;
+  background: linear-gradient(
+    to right,
+    transparent,
+    var(--line) 12%,
+    var(--line) 88%,
+    transparent
+  );
+  border: 0;
+}
+
+/* Corner-bracket frame: the core UI motif. */
+.bracket {
+  position: relative;
+}
+
+.bracket::before,
+.bracket::after {
+  content: '';
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--line);
+  pointer-events: none;
+}
+
+.bracket::before {
+  top: -1px;
+  left: -1px;
+  border-right: 0;
+  border-bottom: 0;
+}
+
+.bracket::after {
+  bottom: -1px;
+  right: -1px;
+  border-left: 0;
+  border-top: 0;
+}
+
+/* --------------------------------------------------------------------------
+   Screen states (boot / chapter cards / overlays)
+   -------------------------------------------------------------------------- */
+
+.screen {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  opacity: 0;
+  transition: opacity 500ms ease;
+}
+
+.screen.is-open {
+  opacity: 1;
+}
+
+.screen-inner {
+  display: grid;
+  justify-items: center;
+  gap: clamp(10px, 1.8vmin, 20px);
+  text-align: center;
+  padding: var(--hud-pad);
+  max-width: min(92vw, 780px);
+}
+
+/* Boot */
+.boot-log {
+  display: grid;
+  gap: 6px;
+  font-size: clamp(10px, 1.2vmin, 13px);
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--cyan);
+  min-height: 5.5em;
+  align-content: center;
+}
+
+.boot-line {
+  opacity: 0;
+  transform: translateY(4px);
+  animation: boot-in 420ms ease forwards;
+}
+
+@keyframes boot-in {
+  to {
+    opacity: 0.9;
+    transform: none;
+  }
+}
+
+.boot-title {
+  font-family: var(--font-display);
+  font-size: clamp(20px, 4.4vmin, 46px);
+  letter-spacing: 0.5em;
+  text-indent: 0.5em;
+  color: var(--white);
+  text-shadow: var(--glow-cyan);
+}
+
+.boot-bar {
+  width: min(46vw, 320px);
+  height: 2px;
+  background: var(--line-soft);
+  position: relative;
+  overflow: hidden;
+}
+
+.boot-bar > i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0%;
+  background: var(--cyan);
+  box-shadow: var(--glow-cyan);
+  transition: width 180ms linear;
+}
+
+/* The single call to action. Everything else stays invisible. */
+.action {
+  font-family: var(--font-display);
+  font-size: clamp(12px, 1.7vmin, 17px);
+  letter-spacing: 0.44em;
+  text-indent: 0.44em;
+  text-transform: uppercase;
+  color: var(--cyan);
+  background: transparent;
+  border: 1px solid var(--line);
+  padding: clamp(12px, 1.6vmin, 18px) clamp(22px, 3.4vmin, 44px);
+  cursor: pointer;
+  position: relative;
+  transition:
+    color 260ms ease,
+    border-color 260ms ease,
+    box-shadow 260ms ease,
+    background 260ms ease;
+  animation: action-breathe 3.4s ease-in-out infinite;
+}
+
+.action::after {
+  content: '';
+  position: absolute;
+  inset: 3px;
+  border: 1px solid transparent;
+  transition: border-color 260ms ease;
+}
+
+.action:hover,
+.action:focus-visible {
+  color: var(--white);
+  border-color: var(--cyan);
+  background: color-mix(in srgb, var(--cyan) 8%, transparent);
+  box-shadow: var(--glow-cyan);
+  outline: none;
+  animation: none;
+}
+
+.action:hover::after,
+.action:focus-visible::after {
+  border-color: var(--line);
+}
+
+.action:active {
+  transform: translateY(1px);
+}
+
+@keyframes action-breathe {
+  0%,
+  100% {
+    box-shadow: 0 0 0 color-mix(in srgb, var(--cyan) 0%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 18px color-mix(in srgb, var(--cyan) 22%, transparent);
+  }
+}
+
+/* Skip / back / minor controls: present but never competing. */
+.ghost-btn {
+  position: absolute;
+  font-family: var(--font-display);
+  font-size: clamp(9px, 1.05vmin, 11px);
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: var(--cyan-dim);
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition:
+    color 220ms ease,
+    border-color 220ms ease;
+}
+
+.ghost-btn:hover,
+.ghost-btn:focus-visible {
+  color: var(--cyan);
+  border-bottom-color: var(--line);
+  outline: none;
+}
+
+.corner-tr {
+  top: var(--hud-pad);
+  right: var(--hud-pad);
+}
+.corner-tl {
+  top: var(--hud-pad);
+  left: var(--hud-pad);
+}
+.corner-br {
+  bottom: var(--hud-pad);
+  right: var(--hud-pad);
+}
+.corner-bl {
+  bottom: var(--hud-pad);
+  left: var(--hud-pad);
+}
+
+/* --------------------------------------------------------------------------
+   HUD
+   -------------------------------------------------------------------------- */
+
+.hud {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 700ms ease;
+}
+
+.hud.is-open {
+  opacity: 1;
+}
+
+/* Energy: the only always-visible gauge. */
+.energy {
+  position: absolute;
+  left: var(--hud-pad);
+  bottom: var(--hud-pad);
+  width: min(30vw, 220px);
+  display: grid;
+  gap: 6px;
+}
+
+.energy-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.energy-track {
+  height: 3px;
+  background: color-mix(in srgb, var(--cyan) 12%, transparent);
+  overflow: hidden;
+}
+
+.energy-fill {
+  position: absolute;
+  height: 100%;
+  inset: 0 auto 0 0;
+  width: 100%;
+  background: linear-gradient(to right, var(--cyan-dim), var(--cyan));
+  box-shadow: var(--glow-cyan);
+  transition: width 220ms ease-out;
+}
+
+.energy-fill.is-low {
+  background: linear-gradient(to right, var(--amber-dim), var(--amber));
+  box-shadow: 0 0 8px color-mix(in srgb, var(--amber) 60%, transparent);
+}
+
+/* Contextual interact prompt — fades in only when something is in reach. */
+.prompt {
+  position: absolute;
+  left: 50%;
+  top: 56%;
+  transform: translate(-50%, 0);
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+
+.prompt.is-open {
+  opacity: 1;
+}
+
+.prompt-key {
+  font-family: var(--font-display);
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  padding: 5px 11px;
+  border: 1px solid var(--line);
+  color: var(--cyan);
+  background: color-mix(in srgb, var(--black) 55%, transparent);
+  backdrop-filter: blur(2px);
+}
+
+.prompt-label {
+  font-family: var(--font-display);
+  font-size: clamp(10px, 1.2vmin, 13px);
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--ice);
+  text-shadow: 0 0 10px rgba(0, 0, 0, 0.9);
+  text-align: center;
+}
+
+/* Transient toasts: discoveries, pickups, system messages. */
+.toasts {
+  position: absolute;
+  top: calc(var(--hud-pad) + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  width: min(90vw, 520px);
+}
+
+.toast {
+  font-family: var(--font-display);
+  font-size: clamp(10px, 1.2vmin, 13px);
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--ice);
+  padding: 9px 18px;
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--cyan);
+  background: color-mix(in srgb, var(--black) 72%, transparent);
+  backdrop-filter: blur(3px);
+  animation: toast-in 320ms ease both;
+  text-align: center;
+}
+
+.toast.is-leaving {
+  animation: toast-out 420ms ease both;
+}
+
+.toast.tone-discovery {
+  border-left-color: var(--white);
+  color: var(--white);
+}
+
+.toast.tone-warn {
+  border-left-color: var(--amber);
+  color: var(--amber);
+}
+
+.toast.tone-iso {
+  border-left-color: var(--violet);
+  color: var(--ice);
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes toast-out {
+  to {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+/* Location readout, top-left. */
+.loc {
+  position: absolute;
+  top: var(--hud-pad);
+  left: var(--hud-pad);
+  display: grid;
+  gap: 5px;
+  padding-left: 10px;
+  border-left: 1px solid var(--line);
+  opacity: 0;
+  transition: opacity 600ms ease;
+}
+
+.loc.is-open {
+  opacity: 0.9;
+}
+
+.loc-name {
+  font-family: var(--font-display);
+  font-size: clamp(11px, 1.35vmin, 15px);
+  letter-spacing: 0.3em;
+  color: var(--white);
+}
+
+.loc-sub {
+  font-size: clamp(9px, 1.05vmin, 11px);
+  letter-spacing: 0.22em;
+  color: var(--cyan-dim);
+  text-transform: uppercase;
+}
+
+/* LINK meter: the bond with the ISO. Fills as she opens up to the player. */
+.link {
+  position: absolute;
+  right: var(--hud-pad);
+  bottom: var(--hud-pad);
+  display: grid;
+  gap: 6px;
+  width: min(26vw, 180px);
+  opacity: 0;
+  transition: opacity 600ms ease;
+}
+
+.link.is-open {
+  opacity: 0.9;
+}
+
+.link-track {
+  height: 1px;
+  background: color-mix(in srgb, var(--violet) 16%, transparent);
+  position: relative;
+}
+
+.link-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0%;
+  background: var(--violet);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--violet) 70%, transparent);
+  transition: width 500ms ease-out;
+}
+
+.link-name {
+  font-family: var(--font-display);
+  font-size: 9px;
+  letter-spacing: 0.34em;
+  color: var(--violet);
+  text-transform: uppercase;
+  text-align: right;
+}
+
+/* --------------------------------------------------------------------------
+   Terminal (overlay reading surfaces)
+   -------------------------------------------------------------------------- */
+
+.terminal {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--black) 78%, transparent);
+  backdrop-filter: blur(4px);
+  opacity: 0;
+  transition: opacity 300ms ease;
+  padding: var(--hud-pad);
+}
+
+.terminal.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.terminal-body {
+  width: min(88vw, 620px);
+  max-height: 74vh;
+  display: grid;
+  gap: clamp(10px, 1.6vmin, 16px);
+  padding: clamp(18px, 3vmin, 34px);
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--ink) 88%, transparent);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--cyan-dim) transparent;
+}
+
+.terminal-body::-webkit-scrollbar {
+  width: 3px;
+}
+
+.terminal-body::-webkit-scrollbar-thumb {
+  background: var(--cyan-dim);
+}
+
+.terminal-title {
+  font-family: var(--font-display);
+  font-size: clamp(11px, 1.4vmin, 15px);
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: var(--cyan);
+}
+
+.terminal-lines {
+  display: grid;
+  gap: 9px;
+  font-size: clamp(12px, 1.45vmin, 16px);
+  line-height: 1.65;
+  color: var(--ice);
+}
+
+.terminal-lines p {
+  opacity: 0;
+  animation: term-in 380ms ease forwards;
+}
+
+.terminal-lines p.tone-system {
+  color: var(--cyan-dim);
+}
+
+.terminal-lines p.tone-iso {
+  color: var(--violet);
+  font-style: italic;
+}
+
+.terminal-lines p.tone-warn {
+  color: var(--amber);
+}
+
+.terminal-lines p.tone-corrupt {
+  color: var(--red);
+  letter-spacing: 0.08em;
+}
+
+@keyframes term-in {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.terminal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+.text-btn {
+  font-family: var(--font-display);
+  font-size: clamp(9px, 1.1vmin, 12px);
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--cyan);
+  background: transparent;
+  border: 1px solid var(--line);
+  padding: 9px 16px;
+  cursor: pointer;
+  transition:
+    color 220ms ease,
+    background 220ms ease,
+    box-shadow 220ms ease;
+}
+
+.text-btn:hover,
+.text-btn:focus-visible {
+  color: var(--white);
+  background: color-mix(in srgb, var(--cyan) 10%, transparent);
+  box-shadow: var(--glow-cyan);
+  outline: none;
+}
+
+.text-btn.is-primary {
+  color: var(--white);
+  border-color: var(--cyan-dim);
+}
+
+.text-btn.tone-warn {
+  color: var(--amber);
+  border-color: color-mix(in srgb, var(--amber) 34%, transparent);
+}
+
+.text-btn.tone-warn:hover {
+  background: color-mix(in srgb, var(--amber) 12%, transparent);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--amber) 30%, transparent);
+}
+
+/* --------------------------------------------------------------------------
+   Objectives
+   -------------------------------------------------------------------------- */
+
+.objectives {
+  position: absolute;
+  top: 50%;
+  left: var(--hud-pad);
+  transform: translateY(-50%);
+  display: grid;
+  gap: 9px;
+  opacity: 0;
+  transition: opacity 400ms ease;
+}
+
+.objectives.is-open {
+  opacity: 0.75;
+}
+
+.objectives .mono-label {
+  margin-bottom: 2px;
+}
+
+.obj {
+  font-size: clamp(10px, 1.2vmin, 13px);
+  letter-spacing: 0.16em;
+  color: var(--cyan-dim);
+  display: flex;
+  gap: 9px;
+  align-items: baseline;
+}
+
+.obj .dot {
+  color: var(--cyan);
+}
+
+.obj.is-done {
+  color: color-mix(in srgb, var(--cyan-dim) 55%, transparent);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--cyan) 30%, transparent);
+}
+
+/* --------------------------------------------------------------------------
+   Map (digital sector map)
+   -------------------------------------------------------------------------- */
+
+.map {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--black) 86%, transparent);
+  backdrop-filter: blur(6px);
+  opacity: 0;
+  transition: opacity 280ms ease;
+}
+
+.map.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.map-canvas {
+  position: relative;
+  width: min(88vw, 660px);
+  aspect-ratio: 1;
+}
+
+.map-canvas svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.map-node {
+  cursor: pointer;
+}
+
+.map-node .node-ring {
+  fill: none;
+  stroke: var(--cyan);
+  stroke-width: 1;
+  opacity: 0.55;
+}
+
+.map-node .node-core {
+  fill: var(--cyan);
+}
+
+.map-node .node-label {
+  font-family: var(--font-display);
+  font-size: 7px;
+  letter-spacing: 0.2em;
+  fill: var(--cyan);
+  text-anchor: middle;
+  opacity: 0.8;
+}
+
+.map-node.is-known {
+  cursor: pointer;
+}
+
+.map-node.is-unknown {
+  opacity: 0.28;
+}
+
+.map-node.is-unknown .node-label {
+  fill: var(--cyan-dim);
+}
+
+.map-node.is-current .node-ring {
+  stroke: var(--white);
+  stroke-width: 1.4;
+  opacity: 1;
+  animation: map-pulse 2.2s ease-in-out infinite;
+}
+
+.map-node.is-current .node-core {
+  fill: var(--white);
+}
+
+.map-node.is-locked .node-core {
+  fill: var(--amber-dim);
+}
+
+.map-node.is-locked .node-ring {
+  stroke: var(--amber-dim);
+}
+
+@keyframes map-pulse {
+  0%,
+  100% {
+    r: 9;
+    opacity: 0.5;
+  }
+  50% {
+    r: 13;
+    opacity: 1;
+  }
+}
+
+.map-link {
+  stroke: var(--cyan-dim);
+  stroke-width: 0.6;
+  opacity: 0.32;
+  fill: none;
+}
+
+.map-link.is-hot {
+  stroke: var(--cyan);
+  opacity: 0.7;
+}
+
+/* --------------------------------------------------------------------------
+   Touch controls
+   -------------------------------------------------------------------------- */
+
+.touch-layer {
+  position: absolute;
+  inset: 0;
+  display: none;
+}
+
+.touch-layer.is-on {
+  display: block;
+}
+
+.stick {
+  position: absolute;
+  left: calc(var(--hud-pad) + 10px);
+  bottom: calc(var(--hud-pad) + 46px);
+  width: 128px;
+  height: 128px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  pointer-events: auto;
+  touch-action: none;
+  opacity: 0.55;
+}
+
+.stick-knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 52px;
+  height: 52px;
+  margin: -26px 0 0 -26px;
+  border: 1px solid var(--cyan);
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--cyan) 10%, transparent);
+  box-shadow: var(--glow-cyan);
+}
+
+.touch-act {
+  position: absolute;
+  right: calc(var(--hud-pad) + 14px);
+  bottom: calc(var(--hud-pad) + 52px);
+  width: 76px;
+  height: 76px;
+  border: 1px solid var(--cyan-dim);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-family: var(--font-display);
+  font-size: 10px;
+  letter-spacing: 0.2em;
+  color: var(--cyan);
+  background: color-mix(in srgb, var(--black) 55%, transparent);
+  pointer-events: auto;
+  touch-action: none;
+}
+
+.touch-act:active {
+  background: color-mix(in srgb, var(--cyan) 18%, transparent);
+}
+
+/* --------------------------------------------------------------------------
+   Death
+   -------------------------------------------------------------------------- */
+
+.death {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: var(--black);
+  opacity: 0;
+  transition: opacity 700ms ease;
+  pointer-events: none;
+}
+
+.death.is-open {
+  opacity: 1;
+}
+
+.death-inner {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  text-align: center;
+}
+
+.death-title {
+  font-family: var(--font-display);
+  font-size: clamp(16px, 3vmin, 34px);
+  letter-spacing: 0.42em;
+  text-indent: 0.42em;
+  color: var(--red);
+  text-shadow: 0 0 18px color-mix(in srgb, var(--red) 45%, transparent);
+}
+
+.death-sub {
+  font-family: var(--font-display);
+  font-size: clamp(10px, 1.2vmin, 13px);
+  letter-spacing: 0.3em;
+  color: var(--cyan-dim);
+  text-transform: uppercase;
+}
+
+/* --------------------------------------------------------------------------
+   Ending
+   -------------------------------------------------------------------------- */
+
+.ending {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 6vmin;
+  background:
+    radial-gradient(ellipse at center, color-mix(in srgb, var(--ink) 70%, transparent), var(--black) 78%);
+  opacity: 0;
+  transition: opacity 1200ms ease;
+  pointer-events: none;
+}
+
+.ending.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.ending-inner {
+  display: grid;
+  gap: clamp(18px, 3vmin, 34px);
+  max-width: 62ch;
+  text-align: left;
+}
+
+.ending-title {
+  font-family: var(--font-display);
+  font-size: clamp(15px, 2.6vmin, 30px);
+  letter-spacing: 0.44em;
+  text-indent: 0.44em;
+  text-align: center;
+  color: var(--ice);
+  text-shadow: 0 0 22px color-mix(in srgb, var(--cyan) 40%, transparent);
+}
+
+.ending-body {
+  font-family: var(--font-mono);
+  font-size: clamp(11px, 1.5vmin, 15px);
+  line-height: 1.85;
+  letter-spacing: 0.06em;
+  white-space: pre-wrap;
+  color: color-mix(in srgb, var(--ice) 78%, transparent);
+  animation: ending-rise 1400ms ease both;
+}
+
+.ending-hint {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.4em;
+  text-align: center;
+  color: var(--cyan-dim);
+  animation: ending-hint 3.2s ease 1.6s both;
+}
+
+@keyframes ending-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes ending-hint {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* A death in progress hides the HUD; an ending keeps it visible but dim. */
+body.is-ending .hud {
+  opacity: 0.12;
+  transition: opacity 900ms ease;
+}
+
+/* --------------------------------------------------------------------------
+   Settings drawer
+   -------------------------------------------------------------------------- */
+
+.settings {
+  position: absolute;
+  top: var(--hud-pad);
+  right: var(--hud-pad);
+  width: min(90vw, 320px);
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--ink) 92%, transparent);
+  backdrop-filter: blur(6px);
+  opacity: 0;
+  transform: translateY(-6px);
+  transition:
+    opacity 240ms ease,
+    transform 240ms ease;
+  pointer-events: none;
+}
+
+.settings.is-open {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+}
+
+.settings-row {
+  display: grid;
+  gap: 7px;
+}
+
+.settings-row label {
+  font-family: var(--font-display);
+  font-size: 9px;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--cyan-dim);
+}
+
+.settings-row .value {
+  color: var(--ice);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+}
+
+input[type='range'] {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 2px;
+  background: color-mix(in srgb, var(--cyan) 20%, transparent);
+  outline: none;
+  cursor: pointer;
+}
+
+input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  background: var(--cyan);
+  box-shadow: var(--glow-cyan);
+  cursor: pointer;
+  border-radius: 0;
+}
+
+input[type='range']::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: 0;
+  border-radius: 0;
+  background: var(--cyan);
+  box-shadow: var(--glow-cyan);
+  cursor: pointer;
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+}
+
+.toggle input {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 34px;
+  height: 14px;
+  border: 1px solid var(--line);
+  background: transparent;
+  position: relative;
+  cursor: pointer;
+  flex: none;
+  transition: background 200ms ease;
+}
+
+.toggle input::after {
+  content: '';
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 10px;
+  height: 10px;
+  background: var(--cyan-dim);
+  transition:
+    transform 200ms ease,
+    background 200ms ease;
+}
+
+.toggle input:checked {
+  background: color-mix(in srgb, var(--cyan) 14%, transparent);
+}
+
+.toggle input:checked::after {
+  transform: translateX(18px);
+  background: var(--cyan);
+  box-shadow: var(--glow-cyan);
+}
+
+.settings-note {
+  font-size: 10px;
+  line-height: 1.6;
+  letter-spacing: 0.1em;
+  color: color-mix(in srgb, var(--cyan-dim) 80%, transparent);
+}
+
+.danger-btn {
+  font-family: var(--font-display);
+  font-size: 9px;
+  letter-spacing: 0.26em;
+  text-transform: uppercase;
+  color: var(--red);
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--red) 40%, transparent);
+  padding: 9px 14px;
+  cursor: pointer;
+  transition:
+    background 200ms ease,
+    box-shadow 200ms ease;
+}
+
+.danger-btn:hover,
+.danger-btn:focus-visible {
+  background: color-mix(in srgb, var(--red) 16%, transparent);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--red) 28%, transparent);
+  outline: none;
+}
+
+/* --------------------------------------------------------------------------
+   Chapter card (narrative beats)
+   -------------------------------------------------------------------------- */
+
+.chapter {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 900ms ease;
+}
+
+.chapter.is-open {
+  opacity: 1;
+}
+
+.chapter-inner {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  text-align: center;
+  padding: 0 var(--hud-pad);
+}
+
+.chapter-num {
+  font-family: var(--font-display);
+  font-size: 10px;
+  letter-spacing: 0.5em;
+  text-indent: 0.5em;
+  color: var(--cyan-dim);
+  text-transform: uppercase;
+}
+
+.chapter-title {
+  font-family: var(--font-display);
+  font-size: clamp(15px, 2.6vmin, 28px);
+  letter-spacing: 0.34em;
+  text-indent: 0.34em;
+  color: var(--white);
+  text-shadow: var(--glow-cyan);
+}
+
+.chapter-line {
+  max-width: min(84vw, 540px);
+  font-size: clamp(12px, 1.5vmin, 16px);
+  line-height: 1.7;
+  color: var(--ice);
+  opacity: 0.9;
+}
+
+/* Auto-advance chapter cards; also advances on click/tap. */
+.chapter.is-open .chapter-inner {
+  animation: chapter-in 1200ms ease both;
+}
+
+@keyframes chapter-in {
+  from {
+    opacity: 0;
+    filter: blur(6px);
+    transform: scale(0.985);
+  }
+  to {
+    opacity: 1;
+    filter: none;
+    transform: none;
+  }
+}
+
+/* A death in progress hides the HUD before the overlay takes over. */
+body.is-dying .hud {
+  opacity: 0;
+}
+
+/* The controls hint sits lower than the interaction prompt so the two never
+   overlap during the first five seconds after landing. */
+.prompt.hint {
+  top: 64%;
+}
+
+/* --------------------------------------------------------------------------
+   Radio strip
+
+   Bottom-centre, because the four corners are taken: location, settings, energy
+   and LINK. Collapsed it is a single 11px line; the transport only exists while
+   `.is-open`. No background, no border, no panel — it is a line of type sitting
+   on the world, the same as everything else here.
+   -------------------------------------------------------------------------- */
+
+.radio {
+  position: absolute;
+  left: 50%;
+  bottom: var(--hud-pad);
+  transform: translateX(-50%);
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+  width: min(72vw, 420px);
+  /* Hidden until the HUD is up, but never `display:none`: the strip has to be
+     able to fade, and a display toggle would kill the transition. */
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 600ms ease,
+    visibility 0s linear 600ms;
+}
+
+.radio.is-visible {
+  opacity: 0.62;
+  visibility: visible;
+  transition:
+    opacity 600ms ease,
+    visibility 0s linear 0s;
+}
+
+.radio.is-visible:hover,
+.radio.is-visible:focus-within {
+  opacity: 1;
+}
+
+/* --- collapsed line --- */
+
+.radio-head {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 18px;
+}
+
+.radio-channel {
+  font-family: var(--font-display);
+  font-size: 9px;
+  letter-spacing: 0.3em;
+  color: var(--cyan-dim);
+  text-transform: uppercase;
+  flex: none;
+}
+
+.radio-title {
+  font-family: var(--font-display);
+  font-size: clamp(9px, 1.05vmin, 11px);
+  letter-spacing: 0.26em;
+  color: var(--ice);
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* The title must never be what makes the strip wider than it is allowed. */
+  min-width: 0;
+}
+
+/* Five pips driven by the same pulse the shaders read. */
+.radio-meter {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 9px;
+  flex: none;
+}
+
+.radio-pip {
+  width: 2px;
+  height: 3px;
+  background: color-mix(in srgb, var(--cyan) 22%, transparent);
+  transition:
+    background 90ms linear,
+    height 90ms linear;
+}
+
+.radio-pip.is-lit {
+  background: var(--cyan);
+  box-shadow: 0 0 5px var(--glow-cyan);
+  height: 8px;
+}
+
+.radio-pip:nth-child(2).is-lit {
+  height: 5px;
+}
+
+.radio-pip:nth-child(4).is-lit {
+  height: 6px;
+}
+
+.radio-expand {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 14px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--cyan-dim);
+  cursor: pointer;
+  flex: none;
+  transition:
+    color 200ms ease,
+    transform 200ms ease;
+}
+
+.radio.is-open .radio-expand {
+  transform: rotate(180deg);
+  color: var(--cyan);
+}
+
+.radio-expand:hover,
+.radio-expand:focus-visible {
+  color: var(--ice);
+  outline: none;
+}
+
+/* --- autoplay fallback --- */
+
+.radio-blocked {
+  font-family: var(--font-display);
+  font-size: 9px;
+  letter-spacing: 0.34em;
+  color: var(--amber);
+  text-transform: uppercase;
+  display: none;
+  cursor: pointer;
+  animation: radio-fade 2.4s ease-in-out infinite;
+}
+
+.radio.is-blocked .radio-blocked {
+  display: block;
+}
+
+.radio.is-blocked .radio-title,
+.radio.is-blocked .radio-meter {
+  /* With nothing to play, a track name and a level meter are both lies. */
+  display: none;
+}
+
+@keyframes radio-fade {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* --- transport, only while open --- */
+
+.radio-panel {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  /* Collapsed by height rather than `display:none`, so opening folds out
+     instead of popping, and so the idle timer can fold it back. */
+  grid-template-rows: 0fr;
+  opacity: 0;
+  overflow: hidden;
+  width: 100%;
+  transition:
+    opacity 240ms ease,
+    grid-template-rows 260ms ease;
+}
+
+.radio-panel > * {
+  min-height: 0;
+}
+
+.radio.is-open .radio-panel {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.radio-transport {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 0;
+}
+
+.radio-btn {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--cyan-dim);
+  cursor: pointer;
+  transition:
+    color 180ms ease,
+    transform 180ms ease;
+}
+
+.radio-btn:hover,
+.radio-btn:focus-visible {
+  color: var(--ice);
+  outline: none;
+}
+
+.radio-btn:active {
+  transform: scale(0.9);
+}
+
+.radio-play {
+  color: var(--cyan);
+}
+
+/* Silent reads as a pause, not as a broken triangle. */
+.radio-play.is-off {
+  color: var(--cyan-dim);
+  opacity: 0.65;
+}
+
+.radio-volume-wrap {
+  display: block;
+  width: 96px;
+}
+
+.radio-volume {
+  height: 2px;
+}
+
+.radio-next {
+  font-family: var(--font-display);
+  font-size: 8px;
+  letter-spacing: 0.28em;
+  color: var(--cyan-dim);
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+/* --- progress --- */
+
+.radio-track {
+  position: relative;
+  width: 100%;
+  height: 1px;
+  background: color-mix(in srgb, var(--cyan) 10%, transparent);
+  opacity: 0;
+  transition: opacity 240ms ease;
+}
+
+.radio.is-open .radio-track {
+  opacity: 1;
+}
+
+.radio-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 0%;
+  background: var(--cyan);
+  opacity: 0.75;
+}
+
+/* The strip gets out of the way for anything that owns the whole screen. */
+.terminal.is-open ~ .radio,
+.map.is-open ~ .radio,
+body.is-dying .radio,
+body.is-ending .radio {
+  opacity: 0;
+  visibility: hidden;
+}
+
+/* --------------------------------------------------------------------------
+   Reduced motion
+   -------------------------------------------------------------------------- */
+
+body.reduced-motion .action,
+body.reduced-motion .map-node.is-current .node-ring,
+body.reduced-motion #layer-scanlines {
+  animation: none !important;
+}
+
+body.reduced-motion .boot-line {
+  animation-duration: 1ms;
+}
+
+body.reduced-motion .terminal-lines p {
+  animation-duration: 1ms;
+  opacity: 1;
+}
+
+body.reduced-motion .toast {
+  animation-duration: 1ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .layer,
+  .screen,
+  .hud,
+  .prompt,
+  .chapter {
+    transition-duration: 240ms !important;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Small screens
+   -------------------------------------------------------------------------- */
+
+@media (max-width: 720px) {
+  .objectives {
+    display: none;
+  }
+
+  .link {
+    width: 120px;
+  }
+
+  .energy {
+    width: 42vw;
+  }
+
+  .boot-bar {
+    width: 62vw;
+  }
+}
+
+@media (max-height: 520px) {
+  .objectives {
+    display: none;
+  }
+}

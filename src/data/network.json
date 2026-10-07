@@ -1,0 +1,129 @@
+{
+  "root": "plaza",
+  "nodes": [
+    {
+      "id": "plaza",
+      "name": "The Plaza",
+      "kind": "sector",
+      "parent": null,
+      "access": 1,
+      "subtitle": "OUTER GRID · SURFACE",
+      "description": "A flat plane of black glass, ruled with lines that keep time. Everything here is built to be seen from far away. That is usually what gives it away.",
+      "map": { "x": 0.5, "y": 0.78 },
+      "music": "grid",
+      "setsFlags": ["arrived"]
+    },
+    {
+      "id": "arcade",
+      "name": "The Arcade",
+      "kind": "sector",
+      "parent": "plaza",
+      "access": 1,
+      "subtitle": "RECREATION LAYER · OPEN",
+      "description": "Someone keeps this place running. The machines still take tokens from an account that was closed years ago.",
+      "map": { "x": 0.5, "y": 0.55 },
+      "music": "arcade",
+      "reveals": ["arcade-back"]
+    },
+    {
+      "id": "arcade-back",
+      "name": "UNKNOWN_NODE",
+      "unknownLabel": "UNKNOWN NODE",
+      "kind": "file",
+      "parent": "arcade",
+      "access": 1,
+      "subtitle": "NOT MAPPED",
+      "description": "",
+      "map": { "x": 0.78, "y": 0.5 },
+      "music": "archive",
+      "setsFlags": ["sawDoor"],
+      "silent": true
+    },
+    {
+      "id": "cycles",
+      "name": "Light Cycles",
+      "kind": "arena",
+      "parent": "arcade",
+      "access": 1,
+      "subtitle": "ARENA · SIMULATION",
+      "description": "",
+      "map": { "x": 0.3, "y": 0.42 },
+      "music": "cycles",
+      "silent": true
+    },
+    {
+      "id": "spire",
+      "name": "The Spire",
+      "kind": "iso",
+      "parent": "plaza",
+      "access": 1,
+      "subtitle": "PERSONAL FREQUENCY",
+      "description": "",
+      "map": { "x": 0.5, "y": 0.12 },
+      "music": "iso",
+      "reveals": ["memory-01"],
+      "silent": true
+    },
+    {
+      "id": "memory-01",
+      "name": "SYSTEM_MEMORY",
+      "unknownLabel": "SYSTEM_MEMORY",
+      "kind": "archive",
+      "parent": "spire",
+      "access": 1,
+      "subtitle": "FRAGMENT 01",
+      "description": "",
+      "map": { "x": 0.72, "y": 0.16 },
+      "music": "archive",
+      "silent": true
+    },
+    {
+      "id": "archive",
+      "name": "Archive Sector",
+      "kind": "sector",
+      "parent": "arcade-back",
+      "access": 2,
+      "subtitle": "STORAGE · SEALED",
+      "description": "",
+      "map": { "x": 0.86, "y": 0.3 },
+      "music": "archive",
+      "silent": true
+    },
+    {
+      "id": "security",
+      "name": "Security Sector",
+      "kind": "security",
+      "parent": "archive",
+      "access": 3,
+      "subtitle": "PRIVILEGED PROCESS",
+      "description": "",
+      "map": { "x": 0.9, "y": 0.62 },
+      "music": "security",
+      "silent": true
+    },
+    {
+      "id": "corrupt",
+      "name": "Corrupted Zone",
+      "kind": "corrupt",
+      "parent": "security",
+      "access": 3,
+      "subtitle": "INTEGRITY FAILURE",
+      "description": "",
+      "map": { "x": 0.68, "y": 0.82 },
+      "music": "corrupt",
+      "silent": true
+    },
+    {
+      "id": "core",
+      "name": "The Core",
+      "kind": "sector",
+      "parent": "corrupt",
+      "access": 4,
+      "subtitle": "ADMINISTRATIVE LAYER",
+      "description": "",
+      "map": { "x": 0.42, "y": 0.94 },
+      "music": "core",
+      "silent": true
+    }
+  ]
+}

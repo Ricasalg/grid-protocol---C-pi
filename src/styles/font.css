@@ -1,0 +1,50 @@
+/* ============================================================================
+   Self-hosted display type.
+
+   Both families ship as .woff2 in src/assets/fonts/ (SIL Open Font License).
+   @font-face with `font-display: swap` and a system fallback stack means the
+   boot screen still renders if a font file is slow or missing: nothing
+   critical depends on a CDN, and nothing depends on a local install.
+
+   See CREDITS.md for licence details.
+   ========================================================================== */
+
+@font-face {
+  font-family: 'Orbitron';
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src:
+    local('Orbitron'),
+    url('../assets/fonts/orbitron-latin.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Rajdhani';
+  font-style: normal;
+  font-weight: 300;
+  font-display: swap;
+  src:
+    local('Rajdhani Light'),
+    url('../assets/fonts/rajdhani-300-latin.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Rajdhani';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src:
+    local('Rajdhani'),
+    url('../assets/fonts/rajdhani-400-latin.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Rajdhani';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src:
+    local('Rajdhani SemiBold'),
+    url('../assets/fonts/rajdhani-600-latin.woff2') format('woff2');
+}

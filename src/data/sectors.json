@@ -1,0 +1,84 @@
+{
+  "sectors": [
+    {
+      "id": "archive",
+      "node": "archive",
+      "title": "ARCHIVE SECTOR",
+      "subtitle": "STORAGE · SEALED",
+      "music": "archive",
+      "tone": "archive",
+      "half": 76,
+      "access": 2,
+      "density": 44,
+      "ceiling": 16,
+      "fog": 0.026,
+      "hostile": false,
+      "pursuers": 0,
+      "locked": [
+        "This sector is sealed.",
+        "It was sealed by something that is still running.",
+        "You do not have ACCESS. Ask the system for it and it will ask you for less than you think."
+      ]
+    },
+    {
+      "id": "security",
+      "node": "security",
+      "title": "SECURITY SECTOR",
+      "subtitle": "PRIVILEGED PROCESS",
+      "music": "security",
+      "tone": "security",
+      "half": 72,
+      "access": 3,
+      "density": 52,
+      "ceiling": 13,
+      "fog": 0.038,
+      "hostile": true,
+      "pursuers": 4,
+      "locked": [
+        "ACCESS DENIED.",
+        "This process answers only to the Core.",
+        "Find something the Core wants more than it wants you gone."
+      ]
+    },
+    {
+      "id": "corrupt",
+      "node": "corrupt",
+      "title": "CORRUPTED ZONE",
+      "subtitle": "INTEGRITY FAILURE",
+      "music": "corrupt",
+      "tone": "corrupt",
+      "half": 80,
+      "ceiling": 0,
+      "fog": 0.03,
+      "access": 3,
+      "density": 38,
+      "hostile": true,
+      "pursuers": 6,
+      "locked": [
+        "INTEGRITY CHECK FAILED.",
+        "This data is not supposed to still be running.",
+        "Neither, apparently, are you."
+      ]
+    },
+    {
+      "id": "core",
+      "node": "core",
+      "title": "THE CORE",
+      "subtitle": "ADMINISTRATIVE LAYER",
+      "music": "core",
+      "tone": "core",
+      "half": 92,
+      "access": 4,
+      "density": 30,
+      "ceiling": 26,
+      "fog": 0.018,
+      "hostile": true,
+      "pursuers": 8,
+      "locked": [
+        "YOU ARE NOT AUTHORISED.",
+        "The Core has no interface. It has outcomes.",
+        "Do not come here. That is not a warning, it is the last instruction the system gives you before it stops giving instructions."
+      ]
+    }
+  ]
+}
